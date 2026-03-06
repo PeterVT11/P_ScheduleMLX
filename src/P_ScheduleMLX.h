@@ -1,3 +1,4 @@
+#pragma once
 #ifndef __P_SCHEDULEEXTENSION__
 #define __P_SCHEDULEEXTENSION__
 
@@ -65,6 +66,11 @@ V 0.20	25.08.2025	Bei einem Neustart wird ein alter Einschaltbefehl sofort aktiv
 					Mitternacht abgewartet werden, bis der Schaltauftrag aktiviert wurde. Jetzt passiert es nach dem Reset.
 					Nicht mehr benötigte Debug-Ausgaben entfernt.
 					Variablen wieder bei den Funktionen.
+V 0.21  03.12.2025	Übergabe-Parameter DstVar* und enableCh wahlweise 8 oder 16 Bit (DatVar hat dann 16 Bit bei ESP32 & RP20, 8Bit bei Nano)
+					Korrektur der Abarbeitung von mehreren Objekten.
+					Debugausgabe "SchaltzeitInfo" angepasst.
+					Proc_Schedule: Wenn xZufall == 0 ist, wird eine Zwangspause zwischen 2 Schaltungen eingefügt von 100 mSec.
+V 0.22  06.03.2026	MobaLedLib.properties angepasst an pyMobaLedLib ab Version 7.1.6 (Danke Harold).
 
 				
 ToDo:
@@ -73,8 +79,7 @@ ToDo:
 		
 */
 #ifdef _PeterDebug
-	const byte MyProgVersionHigh = 0;			// Debugausgabe der Version
-	const byte MyProgVersionLow  = 20;			// Debugausgabe der Version
+	#define MyProg_MSG "0.21"		// Debugausgabe der Version
 #endif
 /*
 Definition in InitDefs.h:
@@ -113,12 +118,16 @@ enum DayState_E : uint8_t	// --> don't change the sequence
 	#define myLedUnKnow 0				// LED-Status ist unbekannt
 
 
+#ifndef inch_t							// 26.11.2025 Jürgen
+#define inch_t uint8_t
+#endif
+
 class P_ScheduleExtension : public MLLExtension
 {
 private:
-	uint8_t dstVar1;							// Übergabeparameter 1.LED
-	uint8_t dstVarN;							// Übergabeparameter letzte LED
-	uint8_t enableCh;							// Übergabeparameter SI_1
+	inch_t dstVar1;								// Übergabeparameter 1.LED					// 26.11.2025 Jürgen
+	inch_t dstVarN;								// Übergabeparameter letzte LED				// 26.11.2025 Jürgen
+	inch_t enableCh;							// Übergabeparameter SI_1					// 26.11.2025 Jürgen
 	uint8_t start_Std;							// Übergabeparameter Start-Stunde
 	uint8_t start_Min;							// Übergabeparameter Start-Minute
 	uint8_t end_Std;							// Übergabeparameter Ende-Stunde
@@ -132,20 +141,21 @@ private:
 
 	uint16_t SwitchVal = 0; 					// Zeit-Tick zum schalten
 	uint8_t ToDoCnt = 0;						// Anzahl Elemente zum schalten
+	uint8_t ToDoCntSum = 0;	
 	uint16_t MyAktTime = 0;						// P_Schedule interner Timer, abgeleitet von Darkness & DayState
 	uint16_t z_diff = 0;
-	
-	uint16_t neuZufall = 999;					// Für Debugausgabe 'Zufall-Wert verkürzt'
+	uint16_t neuZufall = 0;					// Für Debugausgabe 'Zufall-Wert verkürzt'
+
 #ifdef _PeterDebug
+
 	uint8_t orgZufall = 0;						// Für Debugausgabe 'Zufall-Wert verkürzt'
 #endif	
-
-		uint8_t DstVar;
+	inch_t DstVar ;								// 26.11.2025 Jürgen für LongInp 
 
 	public:
 	// Constructor
 	//-----------------------------------------------------------------------------------------------
-  P_ScheduleExtension(uint8_t dstVar1, uint8_t dstVarN, uint8_t enableCh, uint8_t start_Std, uint8_t start_Min, uint8_t end_Std, uint8_t end_Min, uint8_t zufalltick )  
+  P_ScheduleExtension(inch_t dstVar1, inch_t dstVarN, inch_t enableCh, uint8_t start_Std, uint8_t start_Min, uint8_t end_Std, uint8_t end_Min, uint8_t zufalltick )  
 	//-----------------------------------------------------------------------------------------------
   {
 	this->dstVar1 = dstVar1;
@@ -156,6 +166,7 @@ private:
 	this->start_Min = start_Min;
     this->end_Min = end_Min;
 	this->zufall = zufalltick;
+	this->neuZufall = zufalltick;				// 28.11.2025
 	this->neuStart = true;						// Neustart ist im Constructor aktiviert. V0.20
 #ifdef _PeterDebug
 	orgZufall = zufalltick;						// Damit im Debug der Originalwert angezeigt werden kann, wenn Zufall verkürzt wird.
@@ -216,30 +227,30 @@ private:
 	//---------------
 	void SchaltzeitInfo(uint8_t xLed, uint8_t xAnAus, uint8_t xZufall)
 	//---------------
-	// Debug-Ausgabe der aktuellen Zeit
+	// Debug-Ausgabe der aktuellen Zeit				// 02.12.2025
 	{
-		if (Delta_MyAktTime != MyAktTime)
-		{
 			Minutes = ((uint32_t)MyAktTime * 24*60) / 512;	// 0.19
 			if (xAnAus == myLedOn)
 			{
-				Serial << "P_S- ++Schaltzeit: " <<  _WIDTHZ(Minutes/60,2) << ":" <<  _WIDTHZ(Minutes%60,2) << " Soll Ein: " <<  _WIDTHZ(start_Std,2) << ":" << _WIDTHZ(start_Min,2) <<  " Zufall: " << zufall <<  " xZufall: " << xZufall << " -- MyAktTime " << MyAktTime << " Darkness: " << Darkness << " DayState " << DayState << " - LED: " << xLed << " Zustand: "  << xAnAus  << endl;
+				Serial << "P_S- ++Schaltzeit: " <<  _WIDTHZ(Minutes/60,2) << ":" <<  _WIDTHZ(Minutes%60,2) << " Soll Ein: " <<  _WIDTHZ(start_Std,2) << ":" << _WIDTHZ(start_Min,2) <<  " Zufall: " << _WIDTH(zufall,3) <<  " xZufall: " << _WIDTH(xZufall,3) <<  " - LED: " << _WIDTH(xLed,4) << " Zustand: "  << xAnAus  << endl;
 			} else {
-				Serial << "P_S- --Schaltzeit: " <<  _WIDTHZ(Minutes/60,2) << ":" <<  _WIDTHZ(Minutes%60,2) << " Soll Aus: " <<  _WIDTHZ(end_Std,2) << ":" << _WIDTHZ(end_Min,2) <<  " Zufall: " << zufall <<  " xZufall: " << xZufall << " -- MyAktTime " << MyAktTime << " Darkness: " << Darkness << " DayState " << DayState << " - LED: " << xLed << " Zustand: "  << xAnAus << endl;
+				Serial << "P_S- --Schaltzeit: " <<  _WIDTHZ(Minutes/60,2) << ":" <<  _WIDTHZ(Minutes%60,2) << " Soll Aus: " <<  _WIDTHZ(end_Std,2) << ":" << _WIDTHZ(end_Min,2) <<  " Zufall: " << _WIDTH(zufall,3) <<  " xZufall: " << _WIDTH(xZufall,3) << " - LED: " << _WIDTH(xLed,4) << " Zustand: "  << xAnAus << endl;
 			}
-			Delta_MyAktTime = MyAktTime;
-		}
-	}
-	
-	//--------------------------------------------------
-	void SchaltzeitUhrzeit(uint16_t SZeit, String ctext)
-	//--------------------------------------------------
-	// Debug-Ausgabe Schaltzeit (derzeit nicht verwendet)
-	{
-		Minutes = (SZeit * 24*60) / 512;		// 0.19
-		Serial << "P_S- -Schaltzeit " << ctext << ": " << _WIDTHZ(Minutes/60,2) << ":" <<  _WIDTHZ(Minutes%60,2) << " MyAktTime " << MyAktTime << " Darkness: " << Darkness << endl;
 	}
 #endif
+
+	//--------------------------------------
+	void Pausentimer()												// 02.12.2025
+	//--------------------------------------
+	// Wenn xZufall == 0 ist, wird eine Zwangspause zwischen 2 Schaltungen eingefügt von 100 mSec.
+	{
+		unsigned long pTime1 = millis();
+		unsigned long pTime2 = pTime1 + 100;
+		do // Schleife für die Verzögerungszeit
+		{  //   
+			pTime1 = millis();
+		} while (pTime1 < pTime2);
+	}
 	
 	
 	//--------------------------------------
@@ -255,7 +266,7 @@ private:
  	}
 	
 	//--------------------------------------------------
-	uint16_t Uhr2Tick(uint8_t x_stunde, uint8_t x_minute)
+	uint16_t Uhr2Tick( uint8_t x_stunde, uint8_t x_minute)
 	//--------------------------------------------------
 	// Umrechnung der Uhrzeit in MLL-Ticks 
 	{
@@ -274,7 +285,7 @@ private:
 	}
 	
 	//--------------------------------------
-	void CalcSwitchVal(uint8_t LedIs_OnOff)
+	void CalcSwitchVal( uint8_t LedIs_OnOff)
 	//--------------------------------------
 	// Schaltzeit durch "Zufall" ermitteln. 
 	// Es werden 512 hinzugezählt, um einen negativen Übelauf (Schaltezit - Zufall) zu umgehen.
@@ -286,7 +297,7 @@ private:
 			SwitchVal = random(512 + my_start - zufall, 512 + my_start + zufall);
 		} 
 		else 
-		{									// LED ist On -- Ende wird berechnet
+		{											// LED ist On -- Ende wird berechnet
 			SwitchVal = random(512 + my_end - zufall, 512 + my_end + zufall);
 		}
 		if (SwitchVal >= 512)
@@ -305,13 +316,13 @@ private:
 		{
 			SwitchVal = SwitchVal;		// Unnötig, nur zur Klarheit.
 		}
-		if (neuStart == true) {					// V0.20 Wenn NeuStart aktiv, dann prüfen, ob Einschalt-Zeitpunkt vorher war, aber Ausschaltpunkt noch nicht erreicht.
-			if (my_start < 256) {				// Start vor Mittag (12:00)
-				if (my_end > 256) {				// Ende nach Mittag (12:00)
-					SwitchVal = MyAktTime + 1;	// Zur Sicherheit 1 MInute zugeben zu aktueller Schaltzeit.
+		if (neuStart == true) {						// V0.20 Wenn NeuStart aktiv, dann prüfen, ob Einschalt-Zeitpunkt vorher war, aber Ausschaltpunkt noch nicht erreicht.
+			if (my_start < 256) {					// Start vor Mittag (12:00)
+				if (my_end > 256) {					// Ende nach Mittag (12:00)
+					SwitchVal = MyAktTime + 1;		// Zur Sicherheit 1 MInute zugeben zu aktueller Schaltzeit.
 				}	
 			}
-			neuStart = false;			// NeuStart zurücksetzen, da nur einmal benötigt.
+			neuStart = false;						// NeuStart-Flag zurücksetzen, da nur einmal benötigt.
 		}
 	}
 	
@@ -336,35 +347,35 @@ private:
 	void Proc_Schedule(MobaLedLib_C& mobaLedLib)
 	//------------------------------------------
 	{
-
-		uint8_t DstVar1;
-		uint8_t DstVarN;
+		inch_t DstVar1;
+		inch_t DstVarN;
 		uint8_t nRandom;
 		uint8_t xZufall = 2;
 		uint16_t xDiff;
-		uint8_t getInput = mobaLedLib.Get_Input(enableCh); 		// Input LED-Nummer ????
+		uint8_t getInput;			// = mobaLedLib.Get_Input(enableCh); 		// Input LED-Nummer ????
+				DstVar1 = dstVar1;
+				DstVarN = dstVarN;
 	
-		getInput = mobaLedLib.Get_Input(enableCh); 		// Input LED-Nummer ????
+		getInput = mobaLedLib.Get_Input(enableCh); 		// Input #InCh --> bringt 3 zurück
 		if (Inp_Is_On(getInput))
 		{
 			if (ToDoCnt == 0)  
 			{
-				DstVar1 = dstVar1;
-				DstVarN = dstVarN;
+				ToDoCntSum = 0;
 				for (DstVar = DstVar1; DstVar <= DstVarN; DstVar ++)	// Zählen der aktiven LED's	// 0.19
 				{
 						ToDoCnt ++;
+						ToDoCntSum ++;						// 02.12.2025
 				}
 				CalcSwitchVal(my_FirstLedStatus);
 			}
-			if (ToDoCnt > 0)  
+			
+			
+			if (ToDoCnt > 0)  								// 02.12.2025
 			{
-				DstVar1 = dstVar1;
-				DstVarN = dstVarN;
-				if (DstVarN > 0)							// Alt war 1, die Objekte fangen aber bei 0 an. 24.10.24
+				if (DstVarN - DstVar1 > 0)
 				{
-					xZufall = zufall / DstVarN;				// Sind mehrere Objekte vorhanden, so wird der geforderte Zufallswert duch die Anzahl der Objekte 
-															// geteilt. Das ist dann die Zeitdifferenz, indem die Objekte geschaltet werden.
+					xZufall = zufall / ToDoCntSum  ;		// Sind mehrere Objekte vorhanden, so wird der geforderte Zufallswert duch die Anzahl der Objekte. 28.11.2025
 					if (my_end > my_start)					// my_start: 8:00 (170) , my_end: 10:00 (213) = 43
 					{
 						xDiff = my_end - my_start;
@@ -378,7 +389,7 @@ private:
 					{
 						xZufall = 1;
 					}
-					if (xDiff <= DstVarN)
+					if (xDiff <= ToDoCntSum ) 				// 28.11.2025
 					{
 						xZufall = 0;
 					}	
@@ -389,20 +400,24 @@ private:
 				}
 						
 				nRandom = random8(ToDoCnt);
-				if (my_FirstLedStatus == myLedOff)
+				if (my_FirstLedStatus == myLedOff)			// LED ist noch aus
 				{
-					for (uint8_t DstVar = DstVar1; DstVar <= DstVarN; DstVar ++)
+					for ( DstVar = DstVar1; DstVar <= DstVarN; DstVar ++)
 					{
 						if ((MyAktTime == SwitchVal))
 						{
-							if (mobaLedLib.Get_Input(DstVar) == INP_OFF || mobaLedLib.Get_Input(DstVar) == INP_TURNED_OFF)
+							if (mobaLedLib.Get_Input( DstVar) == INP_OFF || mobaLedLib.Get_Input( DstVar) == INP_TURNED_OFF)
 							{
 								if (nRandom-- == 0)
 								{
 #ifdef _PeterDebug
-									SchaltzeitInfo(DstVar, myLedOn, xZufall);
+									SchaltzeitInfo( DstVar, myLedOn, xZufall);
 #endif		
 									mobaLedLib.Set_Input(DstVar,1);
+									if (xZufall == 0)		// 02.12.2025
+									{
+										Pausentimer();		// 02.12.2025
+									}
 									ToDoCnt --;
 									if (ToDoCnt > 0)
 									{
@@ -417,20 +432,24 @@ private:
 						}
 					}
 				}
-				else 
+				else    									// LED ist noch ein 	
 				{
-					for (DstVar = DstVar1; DstVar <= DstVarN; DstVar ++) // 0.19
+					for ( DstVar = DstVar1; DstVar <= DstVarN; DstVar ++) // 0.19
 					{
 						if ((MyAktTime == SwitchVal))
 						{
-							if (mobaLedLib.Get_Input(DstVar) == INP_ON || mobaLedLib.Get_Input(DstVar) == INP_TURNED_ON)
+							if (mobaLedLib.Get_Input( DstVar) == INP_ON || mobaLedLib.Get_Input( DstVar) == INP_TURNED_ON)
 							{
 								if (nRandom-- == 0)
 								{
 #ifdef _PeterDebug
-									SchaltzeitInfo(DstVar, myLedOff, xZufall);
+									SchaltzeitInfo( DstVar, myLedOff, xZufall);
 #endif
-									mobaLedLib.Set_Input(DstVar,0);
+									mobaLedLib.Set_Input( DstVar,0);
+									if (xZufall == 0)		// 02.12.2025
+									{
+										Pausentimer();		// 02.12.2025
+									}
 									ToDoCnt --;
 									if (ToDoCnt > 0)
 									{
@@ -447,6 +466,7 @@ private:
 				}
 				if (ToDoCnt == 0)
 				{
+				
 					if (my_FirstLedStatus == myLedOff)
 					{
 						my_FirstLedStatus = myLedOn ;
@@ -456,7 +476,7 @@ private:
 						my_FirstLedStatus = myLedOff ;
 					}
 				}
-			}
+			} 
 		}
 	}
 
@@ -471,8 +491,8 @@ private:
 	
 #ifdef _PeterDebug
 	flagMitternacht = 0;
-	Serial << "P_S- P_Schedule Version " << MyProgVersionHigh << "." << MyProgVersionLow <<  endl;
-	if (neuZufall < 999)
+	Serial << "P_S- P_Schedule Version " << MyProg_MSG <<  endl;
+	if (neuZufall != orgZufall)
 	{
 		Serial << "P-S-  Zufall-Wert für LED: " << dstVar1 << " verkürzt von " << orgZufall << " auf " << neuZufall <<  " Ticks" << endl; // 0.18 01.01.2025
 	}
@@ -490,19 +510,6 @@ private:
 			Proc_ScheduleMyTime(mobaLedLib);	// Aktuelle Zeit rechnen für P_Schedule-Zeit
 			Proc_Schedule(mobaLedLib);			// P_Schedule ausführen
 		}
-/*		//Funktionsprüfung Uhr2Tick
-		uint8_t xStd = 0;
-		uint8_t xMin = 0;
-		uint16_t xy = 0;
-		for (xStd = 0; xStd < 24; xStd++)
-  		{	
-			for (xMin = 0; xMin < 60; xMin++)
-			{
-				xy = Uhr2Tick(xStd,xMin);
-				Serial << "P_S- " << "Uhrzeit: " << xStd << ":" << xMin << "  Tick " << xy  << endl;
-			}
-		}	
-*/
 #ifdef _PeterDebug
 		if (MyAktTime == 1)
 		{
