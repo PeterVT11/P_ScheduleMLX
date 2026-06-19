@@ -25,4 +25,7 @@ Questions / suggestions / praise / ...
 						   Debugausgabe "SchaltzeitInfo" angepasst.
 						   Proc_Schedule: Wenn xZufall == 0 ist, wird eine Zwangspause zwischen 2 Schaltungen eingefügt von 100 mSec.
 **Ver.: 0.22** 06.03.2026  MobaLedLib.properties angepasst an pyMobaLedLib ab Version 7.1.6 (Danke Harold).
+**Ver.: 0.23** 18.06.2026  Random anpassen wegen Pico 2W. Random darf nicht mit Zufall = 0 aufgerufen werden (Danke Jörn).
+**Ver.: 0.24** 18.06.2026  Vergessene Debug-Info beseitigt.
+
 

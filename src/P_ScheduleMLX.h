@@ -71,6 +71,8 @@ V 0.21  03.12.2025	Übergabe-Parameter DstVar* und enableCh wahlweise 8 oder 16 
 					Debugausgabe "SchaltzeitInfo" angepasst.
 					Proc_Schedule: Wenn xZufall == 0 ist, wird eine Zwangspause zwischen 2 Schaltungen eingefügt von 100 mSec.
 V 0.22  06.03.2026	MobaLedLib.properties angepasst an pyMobaLedLib ab Version 7.1.6 (Danke Harold).
+V 0.23  18.06.2026	Random anpassen wegen Pico 2W. Random darf nicht mit Zufall = 0 aufgerufen werden (Danke Jörn).
+V 0.24	18.06.2026	Vergessene Debug-Info beseitigt.
 
 				
 ToDo:
@@ -79,7 +81,7 @@ ToDo:
 		
 */
 #ifdef _PeterDebug
-	#define MyProg_MSG "0.21"		// Debugausgabe der Version
+	#define MyProg_MSG "0.23"		// Debugausgabe der Version
 #endif
 /*
 Definition in InitDefs.h:
@@ -294,11 +296,21 @@ private:
 		uint16_t tempSchalt = 0;
 		if (LedIs_OnOff == myLedOff)				// LED ist Off  -- Start wird berechnet
 		{
-			SwitchVal = random(512 + my_start - zufall, 512 + my_start + zufall);
+			if (zufall == 0)						// 0.23 18.06.26
+			{
+				SwitchVal = 512 + my_start;
+			} else {
+				SwitchVal = random(512 + my_start - zufall, 512 + my_start + zufall);
+			}
 		} 
 		else 
 		{											// LED ist On -- Ende wird berechnet
-			SwitchVal = random(512 + my_end - zufall, 512 + my_end + zufall);
+			if (zufall == 0)						// 0.23 18.06.26
+			{
+				SwitchVal = 512 + my_end;
+			} else {	
+				SwitchVal = random(512 + my_end - zufall, 512 + my_end + zufall);
+			}
 		}
 		if (SwitchVal >= 512)
 		{
